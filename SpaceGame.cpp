@@ -1,10 +1,10 @@
-﻿#include <iostream>
+#include <iostream>
 #include <vector>
 #include <random>
-#include <time.h>
-#include <conio.h>
-#include <stdlib.h>
-
+#include <time.h> // Work with clocks
+#include <string>
+#include <conio.h> // Keyboard handling
+#include <fstream> // Work with txt data files
 
 using namespace std;
 
@@ -21,7 +21,7 @@ int gun_reload = 10;
 int height = 20;
 int width = 40;
 
-int x_pos = 25;
+int x_pos = 20;
 int y_pos = 15;
 
 vector <vector<int>> bullet_pos = {};
@@ -32,15 +32,26 @@ random_device rd;
 uniform_int_distribution<> enemy_distribution(1, width-1);
 
 int score = 0;
+int total_score = 0;
 
 void Draw();
 void Keyboard();
 void Timers();
 void Logic();
 void EndingScreen();
+void Shop();
+void GameInit();
 int CalculateTime(clock_t diff);
+bool FindSkin(char skin);
+bool DataFileExists();
+void UpdateData(char append);
+int ParseScore(string line);
+void CreateFile();
 
 bool is_End = false;
+bool is_Dead = false;
+bool prog_run = true;
+bool is_shop = false;
 
 clock_t start_keyboard;
 clock_t start_bullet;
@@ -68,30 +79,44 @@ int enemy_speed_set_msec;
 vector<int> bullet_enemy_msec;
 int bullet_enemy_speed_set_msec;
 
+
+
+std::vector<char> shop_skins = {'Y', 'V', 'A', 'U', 'N', 'H', 'Z', 'X', 'W'};
+std::vector<int> shop_prices = {0, 50, 100, 250, 250, 400, 800, 1500, 3000};
+
+std::vector<char> bought_skins = { 'Y' };
+char chosen_skin = shop_skins[0];
+
+
+
 int main()
 {
+    while (prog_run) {
+        GameInit();
 
-    start_keyboard = clock();
-    start_bullet = clock();
-    start_drawing = clock();
-    start_bullet_speed_set = clock();
-    start_enemy_spawn = clock();
-    start_enemy_speed_set = clock();
-    start_bullet_enemy_speed_set = clock();
-    
-    while (!is_End) {
-        if (keyboard_pause_msec >= 50) {
-            Keyboard();
-            start_keyboard = clock();
+        while (!is_End && !is_Dead) {
+            if (keyboard_pause_msec >= 50) {
+                Keyboard();
+                start_keyboard = clock();
+            }
+            Logic();
+            if (drawing_pause_msec >= 2) {
+                Draw();
+                start_drawing = clock();
+            }
+            Timers();
         }
-        Logic();
-        if (drawing_pause_msec >= 2) {
-            Draw();
-            start_drawing = clock();
+        if (!DataFileExists) {
+            CreateFile();
         }
-        Timers();
+        UpdateData(' ');
+        if (is_Dead) { 
+            EndingScreen(); 
+            score = 0;
+        }
+        if (is_shop) { Shop(); }
     }
-    EndingScreen();
+    
 }
 
 void Draw() {
@@ -102,7 +127,7 @@ void Draw() {
     for (int i = 0; i <= height; i++) {
         for (int j = 0; j <= width; j++) {
             if (i == y_pos && j == x_pos) {
-                cout << 'Y';
+                cout << chosen_skin;
             }
             else if (bullet_pos.size() != 0 && bullet_pos.size()-1 >= bul_cnt && i == bullet_pos[bul_cnt][1] && j == bullet_pos[bul_cnt][0]) {
                 cout << '^';
@@ -184,7 +209,10 @@ void Keyboard() {
             start_bullet = clock();
         }
 
-        if (button == 'o' || button == 'O') { is_End = true; }
+        if (button == 'o' || button == 'O') { 
+            is_End = true;
+            prog_run = false;
+        }
     }
 }
 
@@ -299,7 +327,7 @@ void Logic() {
         gun_reload = bullet_pause/100;
     }
 
-    if (HP <= 0) { is_End = true; }
+    if (HP <= 0) { is_Dead = true; }
 }
 
 void EndingScreen() {
@@ -308,9 +336,384 @@ void EndingScreen() {
     cout << "Your score - " << score << endl;
     cout << "Try beating " << score << " next time!" << endl;
 
-    while (_getch() != 'o') {}
+    bool exit = false;
+    while (!exit) {
+        char button = _getch();
+        if (button == 'r') {
+            is_Dead = false;
+            is_End = false;
+            exit = true;
+        }
+        else if (button == 'o') {
+            prog_run = false;
+            exit = true;
+        }
+        else if (button == 's') {
+            is_shop = true;
+            exit = true;
+        }
+    }
+}
+
+void Shop() {
+    system("cls");
+    cout << "--------THE STORE--------" << endl << endl;
+    cout << "Score: " << total_score << endl << endl;
+
+    for (int i = 0; i < 9; i++) {
+        cout << shop_skins[i] << ": " << shop_prices[i] << "  ";
+        if (FindSkin(shop_skins[i])) {cout << "OWNED" << endl;}
+        else if (i == 0) { cout << "STARTER SKIN" << endl; }
+        else { cout << "UNAVAILABLE" << endl; }
+    }
+    cout << endl;
+    cout << "If you want to buy a new skin, you should press the key button with that skin" << endl;
+
+    bool exit = false;
+
+    char add = ' ';
+
+    while (!exit) {
+        char button = _getch();
+        if (button == 'r') {
+            is_Dead = false;
+            is_End = false;
+            is_shop = false;
+            exit = true;
+        }
+        else if (button == 'o') {
+            prog_run = false;
+            exit = true;
+        }
+
+        switch (button) {
+        case 'y':
+            cout << "You already have Y skin" << endl;
+            cout << "Do you want to equip it? (Y/N)" << endl;
+            char agr;
+            cin >> agr;
+            if (agr == 'Y' || agr == 'y') {
+                chosen_skin = shop_skins[0];
+                is_Dead = false;
+                is_End = false;
+                is_shop = false;
+                exit = true;
+            }
+            break;
+
+        case 'v':
+            if (FindSkin(shop_skins[1])) {
+                cout << "You already have V skin" << endl;
+                cout << "Do you want to equip it? (Y/N)" << endl;
+                char agr;
+                cin >> agr;
+                if (agr == 'Y' || agr == 'y') {
+                    chosen_skin = shop_skins[1];
+                    is_Dead = false;
+                    is_End = false;
+                    is_shop = false;
+                    exit = true;
+                }
+            }
+            else if (shop_prices[1] <= total_score) {
+                score = -shop_prices[1];
+                chosen_skin = shop_skins[1];
+                add = shop_skins[1];
+                is_Dead = false;
+                is_End = false;
+                is_shop = false;
+                exit = true;
+            }
+            else { cout << "You Cannot afford V" << endl; }
+            break;
+
+        case 'a':
+            if (FindSkin(shop_skins[2])) {
+                cout << "You already have A skin" << endl;
+                cout << "Do you want to equip it? (Y/N)" << endl;
+                char agr;
+                cin >> agr;
+                if (agr == 'Y' || agr == 'y') {
+                    chosen_skin = shop_skins[2];
+                    is_Dead = false;
+                    is_End = false;
+                    is_shop = false;
+                    exit = true;
+                }
+                else { break; }
+            }
+            else if (shop_prices[2] <= total_score) {
+                score = -shop_prices[2];
+                chosen_skin = shop_skins[2];
+                add = shop_skins[2];
+                is_Dead = false;
+                is_End = false;
+                is_shop = false;
+                exit = true;
+            }
+            else { cout << "You Cannot afford A" << endl; }
+            break;
+        case 'u':
+            if (FindSkin(shop_skins[3])) {
+                cout << "You already have U skin" << endl;
+                cout << "Do you want to equip it? (Y/N)" << endl;
+                char agr;
+                cin >> agr;
+                if (agr == 'Y' || agr == 'y') {
+                    chosen_skin = shop_skins[3];
+                    is_Dead = false;
+                    is_End = false;
+                    is_shop = false;
+                    exit = true;
+                }
+                else { break; }
+            }
+            else if (shop_prices[3] <= total_score) {
+                score = -shop_prices[3];
+                chosen_skin = shop_skins[3];
+                add = shop_skins[3];
+                is_Dead = false;
+                is_End = false;
+                is_shop = false;
+                exit = true;
+            }
+            else { cout << "You Cannot afford U" << endl; }
+            break;
+        case 'n':
+            if (FindSkin(shop_skins[4])) {
+                cout << "You already have N skin" << endl;
+                cout << "Do you want to equip it? (Y/N)" << endl;
+                char agr;
+                cin >> agr;
+                if (agr == 'Y' || agr == 'y') {
+                    chosen_skin = shop_skins[4];
+                    is_Dead = false;
+                    is_End = false;
+                    is_shop = false;
+                    exit = true;
+                }
+                else { break; }
+            }
+            else if (shop_prices[4] <= total_score) {
+                score = -shop_prices[4];
+                chosen_skin = shop_skins[4];
+                add = shop_skins[4];
+                is_Dead = false;
+                is_End = false;
+                is_shop = false;
+                exit = true;
+            }
+            else { cout << "You Cannot afford N" << endl; }
+            break;
+        case 'h':
+            if (FindSkin(shop_skins[5])) {
+                cout << "You already have H skin" << endl;
+                cout << "Do you want to equip it? (Y/N)" << endl;
+                char agr;
+                cin >> agr;
+                if (agr == 'Y' || agr == 'y') {
+                    chosen_skin = shop_skins[5];
+                    is_Dead = false;
+                    is_End = false;
+                    is_shop = false;
+                    exit = true;
+                }
+                else { break; }
+            }
+            else if (shop_prices[5] <= total_score) {
+                score = -shop_prices[5];
+                chosen_skin = shop_skins[5];
+                add = shop_skins[5];
+                is_Dead = false;
+                is_End = false;
+                is_shop = false;
+                exit = true;
+            }
+            else { cout << "You Cannot afford H"<< endl; }
+            break;
+        case 'z':
+            if (FindSkin(shop_skins[6])) {
+                cout << "You already have Z skin" << endl;
+                cout << "Do you want to equip it? (Y/N)" << endl;
+                char agr;
+                cin >> agr;
+                if (agr == 'Y' || agr == 'y') {
+                    chosen_skin = shop_skins[6];
+                    is_Dead = false;
+                    is_End = false;
+                    is_shop = false;
+                    exit = true;
+                }
+                else { break; }
+            }
+            else if (shop_prices[6] <= total_score) {
+                score = -shop_prices[6];
+                chosen_skin = shop_skins[6];
+                add = shop_skins[6];
+                is_Dead = false;
+                is_End = false;
+                is_shop = false;
+                exit = true;
+            }
+            else { cout << "You Cannot afford Z" << endl; }
+            break;
+        case 'x':
+            if (FindSkin(shop_skins[7])) {
+                cout << "You already have X skin" << endl;
+                cout << "Do you want to equip it? (Y/N)" << endl;
+                char agr;
+                cin >> agr;
+                if (agr == 'Y' || agr == 'y') {
+                    chosen_skin = shop_skins[7];
+                    is_Dead = false;
+                    is_End = false;
+                    is_shop = false;
+                    exit = true;
+                }
+                else { break; }
+            }
+            else if (shop_prices[7] <= total_score) {
+                score = -shop_prices[7];
+                chosen_skin = shop_skins[7];
+                add = shop_skins[7];
+                is_Dead = false;
+                is_End = false;
+                is_shop = false;
+                exit = true;
+            }
+            else { cout << "You Cannot afford X"<< endl; }
+
+            break;
+        case 'w':
+            if (FindSkin(shop_skins[8])) {
+                cout << "You already have W skin" << endl;
+                cout << "Do you want to equip it? (Y/N)" << endl;
+                char agr;
+                cin >> agr;
+                if (agr == 'Y' || agr == 'y') {
+                    chosen_skin = shop_skins[8];
+                    is_Dead = false;
+                    is_End = false;
+                    is_shop = false;
+                    exit = true;
+                }
+                else { break; }
+            }
+            else if (shop_prices[8] <= total_score) {
+                score = -shop_prices[8];
+                chosen_skin = shop_skins[8];
+                add = shop_skins[8];
+                is_Dead = false;
+                is_End = false;
+                is_shop = false;
+                exit = true;
+            }
+            else { cout << "You Cannot afford W"<< endl; }
+            break;
+        default:
+            break;
+        }
+    }
+    UpdateData(add);
+}
+
+bool FindSkin(char skin) {
+    int len = bought_skins.size();
+
+    for (int i = 0; i < len; i++) {
+        if (skin == bought_skins[i]) {
+            return true;
+        }
+    }
+    return false;
+
 }
 
 int CalculateTime(clock_t diff) {
     return diff * 1000 / CLOCKS_PER_SEC;
+}
+
+bool DataFileExists() {
+    ifstream file("data.txt");
+
+    return file.good();
+}
+
+void UpdateData(char append) {
+    ifstream file("data.txt");
+    string line1 = "";
+    string line2 = "";
+    if (file.is_open()) {
+        getline(file, line1);
+        getline(file, line2);
+    }
+    file.close();
+
+    if (append != ' ') {
+        line2 += append;
+    }
+
+    int len = line2.length();
+    bought_skins = {};
+    for (int i = len - 1; i >= 0; i--) {
+        if (line2[i] == ':') { break; }
+        else {
+            bought_skins.push_back(line2[i]);
+        }
+    }
+
+    ofstream _file;
+    _file.open("data.txt");
+    if (_file.is_open()) {
+        total_score = score + ParseScore(line1);
+        _file << "s:" << total_score << endl;
+        _file << line2;
+    }
+    _file.close();
+}
+
+int ParseScore(string line){
+    int len = line.length();
+    int summ = 0;
+    for (int i = len-1; i >= 0; i--) {
+        if (line[i] == ':') {break;}
+        else { summ += ((int)line[i] - 48) * pow(10, len-1-i); }
+    }
+
+    return summ;
+}
+
+void CreateFile() {
+    ofstream file("data.txt", ios::out | ios::trunc);
+
+    if (file.is_open()) {
+        file << "s:0" << endl << "r:0";
+        file.close();
+    }
+}
+
+void GameInit(){
+    bullet_pos = {};
+    enemy_bullet_pos = {};
+    enemy_pos = {};
+    bullet_enemy_msec = {};
+    bullet_enemy_speed_set = {};
+    start_bullet_enemy = {};
+
+    x_pos = 20;
+    y_pos = 15;
+
+    score = 0;
+    HP = 3;
+    gun_reload = 10;
+
+
+
+    start_keyboard = clock();
+    start_bullet = clock();
+    start_drawing = clock();
+    start_bullet_speed_set = clock();
+    start_enemy_spawn = clock();
+    start_enemy_speed_set = clock();
+    start_bullet_enemy_speed_set = clock();
 }
